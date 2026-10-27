@@ -1,14 +1,17 @@
-import os
 import sqlite3
 import threading
 import telebot
 from telebot.types import InputPaidMediaVideo, InlineKeyboardMarkup, InlineKeyboardButton
 
+# ==========================================
+# الإعدادات الأساسية (التوكن والمعرف الصحيح)
+# ==========================================
 BOT_TOKEN = "8796423805:AAG8MFlxhZcc4YV4EL_aO4YgAUNyAqpt6Xs"
 ADMIN_ID = 8831289833  
-DB_FILE = "bot_database_new.db"  
+ADMIN_USERNAME = "@Kru8384u"
+DB_FILE = "bot_database3.db"  
 
-bot = telebot.TeleBot(BOT_TOKEN, threaded=True, num_threads=4)
+bot = telebot.TeleBot(BOT_TOKEN, threaded=True, num_threads=10)
 
 media_groups = {}
 media_lock = threading.Lock()
@@ -31,7 +34,7 @@ def get_price():
         cursor.execute("SELECT value FROM settings WHERE key='video_price'")
         row = cursor.fetchone()
         conn.close()
-        return int(row[0]) if row else 2000
+        return int(row) if row else 2000
 
 def set_price(new_price):
     with db_lock:
@@ -59,9 +62,14 @@ def get_stats():
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM users")
         row = cursor.fetchone()
-        return int(row[0]) if row else 0
+        conn.close()
+        return int(row) if row else 0
 
 init_db()
+
+@bot.message_handler(func=lambda message: message.from_user.id != ADMIN_ID, commands=['start'])
+def block_public_users(message):
+    bot.send_message(message.chat.id, "❌ عذراً، هذا البوت خاص ومغلق للعمليات الخلفية فقط.")
 
 def admin_keyboard():
     markup = InlineKeyboardMarkup()
@@ -76,7 +84,7 @@ def open_admin_panel(message):
     current_price = get_price()
     bot.send_message(
         message.chat.id, 
-        f"🛠 **لوحة التحكم**\n\n• السعر الحالي: `{current_price}` نجمة ⭐️", 
+        f"🛠 **مرحباً بك في لوحة التحكم**\n\n• السعر الافتراضي الحالي لتشفير الفيديوهات: `{current_price}` نجمة ⭐️", 
         parse_mode="Markdown", 
         reply_markup=admin_keyboard()
     )
@@ -85,50 +93,50 @@ def open_admin_panel(message):
 def handle_admin_callbacks(call):
     if call.from_user.id != ADMIN_ID: 
         return
+    
     if call.data == "admin_stats":
         total_users = get_stats()
+        stats_text = (
+            f"📊 **إحصائيات البوت الحالية**\n\n"
+            f"• إجمالي المستخدمين والمشترين المسجلين: `{total_users}`\n\n"
+            f"ℹ️ *ملاحظة: النجوم تصل مباشرة إلى رصيد البوت الرسمي المربوط بقناتك الثانية.*"
+        )
         markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("⬅️ عودة", callback_data="admin_menu"))
-        bot.edit_message_text(f"📊 إجمالي المستخدمين: `{total_users}`", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+        markup.add(InlineKeyboardButton("⬅️ العودة للقائمة الرئيسية", callback_data="admin_menu"))
+        bot.edit_message_text(stats_text, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=markup)
+        
     elif call.data == "admin_set_price":
-        msg = bot.send_message(call.message.chat.id, "✏️ **أرسل السعر الجديد (أرقام فقط):**", parse_mode="Markdown")
+        msg = bot.send_message(call.message.chat.id, "✏️ **الرجاء إرسال السعر التلقائي الجديد للبوت (أرقام فقط):**", parse_mode="Markdown")
         bot.register_next_step_handler(msg, save_new_price)
+        
     elif call.data == "admin_menu":
         current_price = get_price()
-        bot.edit_message_text(f"🛠 **لوحة التحكم**\n\n• السعر الحالي: `{current_price}` نجمة ⭐️", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=admin_keyboard())
+        bot.edit_message_text(f"🛠 **مرحباً بك في لوحة تحكم البوت**\n\n• السعر الحالي للفيديو: `{current_price}` نجمة ⭐️", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=admin_keyboard())
 
 def save_new_price(message):
     if message.from_user.id != ADMIN_ID: 
         return
     try:
         new_price = int(message.text.strip())
-        if new_price <= 0: raise ValueError
+        if new_price <= 0: 
+            raise ValueError
         set_price(new_price)
-        bot.send_message(message.chat.id, f"✅ تم تحديث السعر إلى `{new_price}` نجمة ⭐️.", parse_mode="Markdown", reply_markup=admin_keyboard())
+        bot.send_message(message.chat.id, f"✅ **تم بنجاح!** تم تحديث سعر التشفير ليصبح `{new_price}` نجمة ⭐️.", parse_mode="Markdown", reply_markup=admin_keyboard())
     except:
-        bot.send_message(message.chat.id, "❌ خطأ! أرسل رقماً موجباً.", parse_mode="Markdown", reply_markup=admin_keyboard())
+        bot.send_message(message.chat.id, "❌ **إدخال غير صحيح!** يرجى إرسال رقم موجب صحيح فقط.", parse_mode="Markdown", reply_markup=admin_keyboard())
 
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    user = message.from_user
-    register_user(user.id, user.username, user.first_name)
-    current_price = get_price()
-    bot.reply_to(message, f"🎬 **أهلاً بك!**\n\nالسعر الحالي للفيديوهات: `{current_price}` نجمة ⭐️.")
-
-def delayed_send_group(group_id, current_price, caption_text):
+def delayed_send_group(group_id, current_price):
     with media_lock:
         if group_id in media_groups:
             data = media_groups.pop(group_id)
-            send_invoice(data['chat_id'], data['media_list'], data['caption'], current_price, caption_text)
+            send_invoice(data['chat_id'], data['media_list'], data['caption'], current_price)
 
 @bot.message_handler(content_types=['video'])
 def handle_video(message):
-    user = message.from_user
-    if user.id != ADMIN_ID:
-        return  
-    
+    if message.from_user.id != ADMIN_ID:
+        return
+        
     current_price = get_price()
-    video_caption = message.caption if message.caption else "فيديو مدفوع"
     
     if message.media_group_id:
         group_id = message.media_group_id
@@ -140,7 +148,7 @@ def handle_video(message):
                     'caption': None,
                     'timer': None
                 }
-                t = threading.Timer(1.5, delayed_send_group, args=[group_id, current_price, video_caption])
+                t = threading.Timer(2.0, delayed_send_group, args=[group_id, current_price])
                 media_groups[group_id]['timer'] = t
                 t.start()
                 
@@ -149,47 +157,54 @@ def handle_video(message):
                 media_groups[group_id]['caption'] = message.caption
     else:
         media_list = [InputPaidMediaVideo(media=message.video.file_id)]
-        send_invoice(message.chat.id, media_list, message.caption if message.caption else "", current_price, video_caption)
+        send_invoice(message.chat.id, media_list, message.caption if message.caption else "", current_price)
 
-def send_invoice(chat_id, media_list, caption, price, video_title):
+def send_invoice(chat_id, media_list, caption, price):
     try:
         bot.send_paid_media(chat_id=chat_id, star_count=price, media=media_list, caption=caption if caption else "")
     except Exception as e:
-        report_failed_payment(chat_id, f"فشل الإرسال: {str(e)}", video_title)
+        report_failed_payment(ADMIN_ID, f"فشل تشفير الميديا: {str(e)}")
 
 @bot.pre_checkout_query_handler(func=lambda query: True)
 def checkout(pre_checkout_query):
     try:
         bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+        user = pre_checkout_query.from_user
+        register_user(user.id, user.username, user.first_name)
     except Exception as e:
-        report_failed_payment(pre_checkout_query.from_user.id, f"خطأ دفع: {str(e)}", "عملية دفع")
+        report_failed_payment(pre_checkout_query.from_user.id, f"خطأ في مرحلة الفحص المسبق للدفع: {str(e)}")
 
 @bot.message_handler(content_types=['successful_payment'])
 def got_payment(message):
     user = message.from_user
     payment_info = message.successful_payment
-    stars_amount = payment_info.total_amount if payment_info else "غير معروف"
-    register_user(user.id, user.username, user.first_name)
+    stars_amount = payment_info.total_amount
     
     report_text = (
-        f"💰 **تمت عملية الشراء بنجاح!**\n\n"
-        f"👤 **المشتري:** {user.first_name}\n"
-        f"🆔 **الآي دي:** `{user.id}`\n"
-        f"🔗 **المعرف:** @{user.username if user.username else 'لا يوجد'}\n"
-        f"⭐ **المبلغ المدفوع:** `{stars_amount}` نجمة 🌟"
+        f"💰 **تقرير مبيعات فوري (عملية ناجحة)**\n\n"
+        f"• **المشتري:** {user.first_name} \n"
+        f"• **اسم المستخدم:** @{user.username if user.username else 'لا يوجد'}\n"
+        f"• **معرف المستخدم:** `{user.id}`\n"
+        f"• **المبلغ المدفوع:** `{stars_amount}` نجمة ⭐️\n"
+        f"• **رقم المعاملة الفريد:** `{payment_info.telegram_payment_charge_id}`\n"
+        f"✅ تمت العملية بنجاح وتم فتح قفل الميديا للمستخدم."
     )
     try:
         bot.send_message(ADMIN_ID, report_text, parse_mode="Markdown")
-    except Exception as err:
-        print(f"Error: {err}")
+    except:
+        pass
 
-def report_failed_payment(user_id, reason, video_title="محتوى"):
-    fail_text = f"⚠️ **فشلت عملية الشراء!**\n🆔 `{user_id}`\n❌ السبب: {reason}"
+def report_failed_payment(user_id, reason):
     try:
-        bot.send_message(ADMIN_ID, fail_text, parse_mode="Markdown")
+        report_text = (
+            f"⚠️ **تقرير خطأ / فشل معاملة نجوم**\n\n"
+            f"• **معرف المستخدم المتأثر:** `{user_id}`\n"
+            f"• **تفاصيل المشكلة:** {reason}\n"
+            f"❌ يرجى فحص حالة محفظة النجوم للبوت أو العميل."
+        )
+        bot.send_message(ADMIN_ID, report_text, parse_mode="Markdown")
     except:
         pass
 
 if __name__ == '__main__':
-    bot.remove_webhook()
-    bot.infinity_polling(skip_pending=True)
+    bot.infinity_polling()
