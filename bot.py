@@ -128,17 +128,18 @@ def send_welcome(message):
     current_price = get_price()
     bot.reply_to(message, f"🎬 **أهلاً بك!**\n\nالسعر الحالي للفيديوهات: `{current_price}` نجمة ⭐️.")
 
-def delayed_send_group(group_id, current_price):
+def delayed_send_group(group_id, current_price, caption_text):
     with media_lock:
         if group_id in media_groups:
             data = media_groups.pop(group_id)
-            send_invoice(data['chat_id'], data['media_list'], data['caption'], current_price)
+            send_invoice(data['chat_id'], data['media_list'], data['caption'], current_price, caption_text)
 
 @bot.message_handler(content_types=['video'])
 def handle_video(message):
     user = message.from_user
     register_user(user.id, user.username, user.first_name)
     current_price = get_price()
+    video_caption = message.caption if message.caption else "فيديو بدون عنوان"
     
     if message.media_group_id:
         group_id = message.media_group_id
@@ -150,7 +151,7 @@ def handle_video(message):
                     'caption': None,
                     'timer': None
                 }
-                t = threading.Timer(1.5, delayed_send_group, args=[group_id, current_price])
+                t = threading.Timer(1.5, delayed_send_group, args=[group_id, current_price, video_caption])
                 media_groups[group_id]['timer'] = t
                 t.start()
                 
@@ -159,16 +160,16 @@ def handle_video(message):
                 media_groups[group_id]['caption'] = message.caption
     else:
         media_list = [InputPaidMediaVideo(media=message.video.file_id)]
-        send_invoice(message.chat.id, media_list, message.caption if message.caption else "", current_price)
+        send_invoice(message.chat.id, media_list, message.caption if message.caption else "", current_price, video_caption)
 
-def send_invoice(chat_id, media_list, caption, price):
+def send_invoice(chat_id, media_list, caption, price, video_title):
     try:
         bot.send_paid_media(chat_id=chat_id, star_count=price, media=media_list, caption=caption if caption else "")
     except Exception as e:
-        report_failed_payment(chat_id, f"فشل الإرسال: {str(e)}")
+        report_failed_payment(chat_id, f"فشل الإرسال: {str(e)}", video_title)
 
 # ==========================================
-# معالجة المدفوعات والطلبات
+# معالجة المدفوعات والطلبات والتقارير الفورية
 # ==========================================
 
 @bot.pre_checkout_query_handler(func=lambda query: True)
@@ -176,7 +177,7 @@ def checkout(pre_checkout_query):
     try:
         bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
     except Exception as e:
-        report_failed_payment(pre_checkout_query.from_user.id, f"خطأ دفع: {str(e)}")
+        report_failed_payment(pre_checkout_query.from_user.id, f"خطأ دفع: {str(e)}", "عملية دفع معلقة")
 
 @bot.message_handler(content_types=['successful_payment'])
 def got_payment(message):
@@ -184,19 +185,30 @@ def got_payment(message):
     payment_info = message.successful_payment
     stars_amount = payment_info.total_amount
     
+    # تقرير فوري يصلك على حسابك عند نجاح الشراء
     report_text = (
-        f"💰 **عملية شراء ناجحة!**\n\n"
-        f"• **المشتري:** {user.first_name} (`{user.id}`)\n"
-        f"• **المبلغ:** `{stars_amount}` نجمة ⭐️"
+        f"💰 **تمت عملية الشراء بنجاح!**\n\n"
+        f"👤 **المشتري:** {user.first_name}\n"
+        f"🆔 **الآي دي:** `{user.id}`\n"
+        f"🔗 **المعرف:** @{user.username if user.username else 'لا يوجد'}\n"
+        f"⭐ **المبلغ المدفوع:** `{stars_amount}` نجمة 🌟\n"
+        f"📊 **الحالة:** نجحت العملية وتم إرسال المحتوى للمستخدم."
     )
     try:
         bot.send_message(ADMIN_ID, report_text, parse_mode="Markdown")
-    except:
-        pass
+    except Exception as err:
+        print(f"Error sending report: {err}")
 
-def report_failed_payment(user_id, reason):
+def report_failed_payment(user_id, reason, video_title="محتوى غير معروف"):
+    # تقرير فوري يصلك عند فشل عملية الشراء
+    fail_text = (
+        f"⚠️ **فشلت عملية الشراء!**\n\n"
+        f"🆔 **آي دي المستخدم:** `{user_id}`\n"
+        f"❌ **السبب:** {reason}\n"
+        f"🎥 **المحتوى المستهدف:** {video_title}"
+    )
     try:
-        bot.send_message(ADMIN_ID, f"⚠️ خطأ: {reason} (user: {user_id})", parse_mode="Markdown")
+        bot.send_message(ADMIN_ID, fail_text, parse_mode="Markdown")
     except:
         pass
 
