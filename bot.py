@@ -183,7 +183,10 @@ def checkout(pre_checkout_query):
 def got_payment(message):
     user = message.from_user
     payment_info = message.successful_payment
-    stars_amount = payment_info.total_amount
+    stars_amount = payment_info.total_amount if payment_info else "غير معروف"
+    
+    # تسجيل بيانات المستخدم للتأكد
+    register_user(user.id, user.username, user.first_name)
     
     # تقرير فوري يصلك على حسابك عند نجاح الشراء
     report_text = (
@@ -192,7 +195,7 @@ def got_payment(message):
         f"🆔 **الآي دي:** `{user.id}`\n"
         f"🔗 **المعرف:** @{user.username if user.username else 'لا يوجد'}\n"
         f"⭐ **المبلغ المدفوع:** `{stars_amount}` نجمة 🌟\n"
-        f"📊 **الحالة:** نجحت العملية وتم إرسال المحتوى للمستخدم."
+        f"📊 **الحالة:** نجحت العملية وتم بيع المحتوى للمستخدم."
     )
     try:
         bot.send_message(ADMIN_ID, report_text, parse_mode="Markdown")
