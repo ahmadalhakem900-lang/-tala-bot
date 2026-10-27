@@ -215,6 +215,6 @@ def report_failed_payment(user_id, reason, video_title="محتوى غير معر
     except:
         pass
 
-if __name__ == '__main__':bot.remove_webhook()
-
+if __name__ == '__main__':
+    bot.remove_webhook()
     bot.infinity_polling(skip_pending=True)
