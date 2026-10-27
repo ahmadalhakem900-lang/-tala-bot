@@ -1,30 +1,9 @@
 import os
 import sqlite3
 import threading
-from flask import Flask
 import telebot
 from telebot.types import InputPaidMediaVideo, InlineKeyboardMarkup, InlineKeyboardButton
 
-# ==========================================
-# تشغيل سيرفر ويب وهمي لرضا منصة Render
-# ==========================================
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "Bot is running 24/7!"
-
-def run_web():
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
-
-def keep_alive():
-    t = threading.Thread(target=run_web)
-    t.daemon = True
-    t.start()
-
-# ==========================================
-# الإعدادات الأساسية للبوت
-# ==========================================
 BOT_TOKEN = "8796423805:AAG8MFlxhZcc4YV4EL_aO4YgAUNyAqpt6Xs"
 ADMIN_ID = 8831289833  
 DB_FILE = "bot_database_new.db"  
@@ -146,7 +125,7 @@ def delayed_send_group(group_id, current_price, caption_text):
 def handle_video(message):
     user = message.from_user
     if user.id != ADMIN_ID:
-        return  # استقبال الفيديوهات الحصرية للمشرف فقط لبيعها
+        return  
     
     current_price = get_price()
     video_caption = message.caption if message.caption else "فيديو مدفوع"
@@ -205,13 +184,12 @@ def got_payment(message):
         print(f"Error: {err}")
 
 def report_failed_payment(user_id, reason, video_title="محتوى"):
-    fail_text = f"⚠️ **فشلت عملية الشراء!**\n🆔 `{user_id}`\n❌ الإبن: {reason}"
+    fail_text = f"⚠️ **فشلت عملية الشراء!**\n🆔 `{user_id}`\n❌ السبب: {reason}"
     try:
         bot.send_message(ADMIN_ID, fail_text, parse_mode="Markdown")
     except:
         pass
 
 if __name__ == '__main__':
-    keep_alive()  # تشغيل خادم الويب الوهمي لمنع Render من إغلاق البوت
     bot.remove_webhook()
     bot.infinity_polling(skip_pending=True)
